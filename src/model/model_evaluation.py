@@ -2,91 +2,100 @@ import numpy as np
 import pandas as pd
 import pickle
 import json
+from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
 import logging
-from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score, f1_score
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger()
+# logging configuration
+logger = logging.getLogger('model_evaluation')
+logger.setLevel('DEBUG')
 
-def load_model(model_path: str):
+console_handler = logging.StreamHandler()
+console_handler.setLevel('DEBUG')
+
+file_handler = logging.FileHandler('model_evaluation_errors.log')
+file_handler.setLevel('ERROR')
+
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(formatter)
+file_handler.setFormatter(formatter)
+
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
+
+def load_model(file_path: str):
+    """Load the trained model from a file."""
     try:
-        with open(model_path, 'rb') as file:
-            clf = pickle.load(file)
-        logger.info("Model loaded successfully.")
-        return clf
-    except FileNotFoundError as e:
-        logger.error(f"Model file not found: {e}")
+        with open(file_path, 'rb') as file:
+            model = pickle.load(file)
+        logger.debug('Model loaded from %s', file_path)
+        return model
+    except FileNotFoundError:
+        logger.error('File not found: %s', file_path)
         raise
     except Exception as e:
-        logger.error(f"Error loading model: {e}")
+        logger.error('Unexpected error occurred while loading the model: %s', e)
         raise
 
-def load_data(file_path: str):
+def load_data(file_path: str) -> pd.DataFrame:
+    """Load data from a CSV file."""
     try:
-        data = pd.read_csv(file_path)
-        logger.info(f"Data loaded successfully from {file_path}.")
-        return data
-    except FileNotFoundError as e:
-        logger.error(f"Data file not found: {e}")
+        df = pd.read_csv(file_path)
+        logger.debug('Data loaded from %s', file_path)
+        return df
+    except pd.errors.ParserError as e:
+        logger.error('Failed to parse the CSV file: %s', e)
         raise
     except Exception as e:
-        logger.error(f"Error reading data from {file_path}: {e}")
+        logger.error('Unexpected error occurred while loading the data: %s', e)
         raise
 
-def evaluate_model(clf, X_test, y_test):
+def evaluate_model(clf, X_test: np.ndarray, y_test: np.ndarray) -> dict:
+    """Evaluate the model and return the evaluation metrics."""
     try:
-        # Make predictions
         y_pred = clf.predict(X_test)
         y_pred_proba = clf.predict_proba(X_test)[:, 1]
 
-        # Calculate metrics
+        accuracy = accuracy_score(y_test, y_pred)
+        precision = precision_score(y_test, y_pred)
+        recall = recall_score(y_test, y_pred)
+        auc = roc_auc_score(y_test, y_pred_proba)
+
         metrics_dict = {
-            'accuracy': accuracy_score(y_test, y_pred),
-            'precision': precision_score(y_test, y_pred),
-            'recall': recall_score(y_test, y_pred),
-            'auc': roc_auc_score(y_test, y_pred_proba),
-            'f1_score': f1_score(y_test, y_pred),
+            'accuracy': accuracy,
+            'precision': precision,
+            'recall': recall,
+            'auc': auc
         }
-        logger.info("Model evaluation metrics calculated successfully.")
+        logger.debug('Model evaluation metrics calculated')
         return metrics_dict
     except Exception as e:
-        logger.error(f"Error during model evaluation: {e}")
+        logger.error('Error during model evaluation: %s', e)
         raise
 
-def save_metrics(metrics: dict, output_path: str):
+def save_metrics(metrics: dict, file_path: str) -> None:
+    """Save the evaluation metrics to a JSON file."""
     try:
-        with open(output_path, 'w') as file:
+        with open(file_path, 'w') as file:
             json.dump(metrics, file, indent=4)
-        logger.info(f"Metrics saved to {output_path}.")
+        logger.debug('Metrics saved to %s', file_path)
     except Exception as e:
-        logger.error(f"Error saving metrics: {e}")
+        logger.error('Error occurred while saving the metrics: %s', e)
         raise
 
 def main():
     try:
-        # Define paths
-        model_path = 'models/model.pkl'
-        test_data_path = './data/features/test_bow.csv'
-        metrics_path = 'reports/metrices.json'
-
-        # Load the trained model
-        clf = load_model(model_path)
-
-        # Load test data
-        test_data = load_data(test_data_path)
-        X_test = test_data.iloc[:, 0:-1].values
+        clf = load_model('./models/model.pkl')
+        test_data = load_data('./data/processed/test_tfidf.csv')
+        
+        X_test = test_data.iloc[:, :-1].values
         y_test = test_data.iloc[:, -1].values
 
-        # Evaluate model
         metrics = evaluate_model(clf, X_test, y_test)
-
-        # Save metrics
-        save_metrics(metrics, metrics_path)
-
-        logger.info("Model evaluation completed successfully.")
+        
+        save_metrics(metrics, 'reports/metrics.json')
     except Exception as e:
-        logger.error(f"An error occurred in the main workflow: {e}")
+        logger.error('Failed to complete the model evaluation process: %s', e)
+        print(f"Error: {e}")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

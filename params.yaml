@@ -1,9 +1,9 @@
-make_dataset:
-  test_size : 0.30
+data_ingestion:
+  test_size: 0.2
 
-build_features:
-  max_features: 500
+feature_engineering:
+  max_features: 100
 
-train_model:
-  n_estimators: 1000
-  learning_rate: 0.01
+model_building:
+  n_estimators: 25
+  learning_rate: 0.1
